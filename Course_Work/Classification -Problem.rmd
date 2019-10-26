@@ -1,0 +1,86 @@
+---
+title: "Weight Lifting Classification Problem"
+output: html_document
+---
+
+## Preparation
+
+Loading dependent libraries. 
+
+Loading Training and Testing datasets for data processing.
+
+```{r Preparation}
+library(caret)
+library(randomForest)
+training <- read.csv("pml-training.csv",row.names=1,na.strings = "")
+testing <- read.csv("pml-testing.csv",row.names=1,na.strings = "NA")
+```
+
+## Data Cleaning
+
+Removing constant parameters that has no contribution to the output.
+
+```{r Data Cleaning, echo=FALSE}
+nsv <- nearZeroVar(training,saveMetrics=TRUE)
+```
+
+## Split Train/Test Datasets
+
+Cleansing Training and Testing datasets with the input from Data Cleaning step.
+
+```{r pressure, echo=FALSE}
+training <- training[,!nsv$nzv]
+testing <- testing[,!nsv$nzv]
+```
+
+# Removing contextual and incomplete variables
+
+Removing variables that were not collected for the all the experiments.
+
+Removing variables that did not have proper numerical values.
+
+Removing contextual variables since the experiments do not have sensitivity to measurement timestamp.
+
+```{r Removing contextual and incomplete variables, echo=FALSE}
+training_filter_na <- training[,(colSums(is.na(training)) == 0)]
+testing_filter_na <- testing[,(colSums(is.na(testing)) == 0)]
+
+colRm_train <- c("user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","num_window")
+colRm_test <- c("user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","num_window","problem_id")
+
+training_colRm <- training_filter_na[,!(names(training_filter_na) %in% colRm_train)]
+testing_colRm <- testing_filter_na[,!(names(testing_filter_na) %in% colRm_test)]
+
+dim(training_colRm)
+dim(testing_colRm)
+
+inTrain <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+training_clean <- training_colRm[inTrain,]
+validation_clean <- training_colRm[-inTrain,]
+```
+
+## Building Models
+
+Random forest technique is used since this is a typical classificaion problem.
+
+```{r Building Models, echo=FALSE}
+set.seed(1234)
+rfFit <- train(classe ~ ., method = "rf", data = training_clean, importance = T, trControl = trainControl(method = "cv", number = 4))
+validation_pred <- predict(rfFit, newdata=validation_clean)
+confusionMatrix(validation_pred,validation_clean$classe)
+
+imp <- varImp(rfFit)$importance
+varImpPlot(rfFit$finalModel, sort = TRUE, type = 1, pch = 19, col = 1, cex = 1, main = "Importance of the Predictors")
+```
+
+## Prediction of Test dataset
+
+Applying random forest models on the test dataset.
+
+```{r Prediction of Test dataset, echo=FALSE}
+testing_pred <- predict(rfFit, newdata=testing_colRm)
+```
+
+```{r Predicted Result}
+plot(testing_pred)
+```
